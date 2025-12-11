@@ -82,6 +82,7 @@
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            width: 100%;
         }
 
         th,
@@ -111,6 +112,52 @@
             margin-top: 0.4rem;
             font-size: 0.85rem;
         }
+
+        /* --- burger menu --- */
+        .collapsible {
+            cursor: pointer;
+            background: #dfe6ff;
+            padding: 0.6rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .burger {
+            font-size: 1.2rem;
+        }
+
+        .collapse-content {
+            display: none;
+        }
+
+        .collapse-content.open {
+            display: block;
+        }
+
+        /* --- layout pro tabulku vlevo + poutka vpravo --- */
+        .row {
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        .left {
+            flex: 0 0 60%;
+        }
+
+        .right {
+            flex: 1;
+            background: #ffffff;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 
@@ -121,11 +168,18 @@
             <label for="radius">Poloměr R (cm)</label>
             <input id="radius" type="number" min="1" value="600" step="1">
         </div>
+
         <div class="field">
             <label for="stripHeight">Šířka pruhu (cm)</label>
             <input id="stripHeight" type="number" min="1" value="145" step="1">
         </div>
-        <button id="updateBtn">Přepočítat &amp; překreslit</button>
+
+        <div class="field">
+            <label for="loopWidth">Šířka poutka (cm)</label>
+            <input id="loopWidth" type="number" min="1" value="5" step="1">
+        </div>
+
+        <button id="updateBtn">Přepočítat & překreslit</button>
         <div id="error"></div>
     </div>
 
@@ -133,10 +187,20 @@
         <canvas id="plot" width="800" height="500"></canvas>
     </div>
 
-    <h2>Délky pruhů (horní hrany)</h2>
-    <div id="tableContainer"></div>
+    <h2>Délky pruhů & počet poutek</h2>
 
-    <h2>Odstřihy (vodorovné vzdálenosti ke kružnici)</h2>
+    <div class="row">
+        <div class="left">
+            <div id="tableContainer"></div>
+        </div>
+
+        <div class="right">
+            Počet poutek (po 50 cm):
+            <div id="loopCount" style="font-size:2rem; margin-top:0.5rem;">0</div>
+        </div>
+    </div>
+
+    <h2>Odstřihy podle pruhů</h2>
     <div id="cutTableContainer"></div>
 
     <script>
@@ -148,70 +212,77 @@
         const tableContainer = document.getElementById('tableContainer');
         const cutTableContainer = document.getElementById('cutTableContainer');
 
-        // ------------------------------------------------------
-        //  Výpočet VODOROVNÉHO odstřihu
-        // ------------------------------------------------------
+        /* -------------------------  
+           FUNKCE: odstřih  
+        -------------------------- */
         function horizontalCut(R, yStrip, t) {
             const y = yStrip + t;
             if (y >= R) return 0;
-
             const xCurve = Math.sqrt(R * R - y * y);
             const xStrip = Math.sqrt(R * R - yStrip * yStrip);
-
             return xStrip - xCurve;
         }
 
-        // ------------------------------------------------------
-        //  Vytvoření tabulky odstřihů
-        // ------------------------------------------------------
-
+        /* -------------------------
+           TABULKA odstřihů — pro každý pruh samostatný burger
+        -------------------------- */
         function generateCutTable(strips, R, step = 10) {
             const colors = ["#ffe6e6", "#e6f0ff", "#f3e6ff", "#e6ffe6", "#f2f2f2", "#fff2e6"];
-
-            let html = "<table><thead><tr>" +
-                "<th>Pruh</th>" +
-                "<th>Výška od spodní hrany (cm)</th>" +
-                "<th>Odstřih dovnitř (cm)</th>" +
-                "</tr></thead><tbody>";
+            let html = "";
 
             strips.forEach((sh, idx) => {
-
                 const stripNumber = idx + 1;
                 const color = colors[idx % colors.length];
                 const yStrip = sh.yBottom;
                 const height = sh.yTop - sh.yBottom;
 
+                html += `
+                    <div class="collapsible">Pruh ${stripNumber} <span class="burger">☰</span></div>
+                    <div class="collapse-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Výška od spodní hrany (cm)</th>
+                                    <th>Odstřih dovnitř (cm)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
                 for (let t = 0; t <= height; t += step) {
                     const cut = horizontalCut(R, yStrip, t);
-
-                    html += `<tr style="background:${color}">
-                <td>${stripNumber}</td>
-                <td>${t}</td>
-                <td>${cut.toFixed(2)}</td>
-            </tr>`;
+                    html += `
+                        <tr style="background:${color}">
+                            <td>${t}</td>
+                            <td>${cut.toFixed(2)}</td>
+                        </tr>`;
                 }
 
                 if (height % step !== 0) {
                     const cut = horizontalCut(R, yStrip, height);
-                    html += `<tr style="background:${color}">
-                <td>${stripNumber}</td>
-                <td>${height}</td>
-                <td>${cut.toFixed(2)}</td>
-            </tr>`;
+                    html += `
+                        <tr style="background:${color}">
+                            <td>${height}</td>
+                            <td>${cut.toFixed(2)}</td>
+                        </tr>`;
                 }
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>`;
             });
 
-            html += "</tbody></table>";
             return html;
         }
 
-
-        // ------------------------------------------------------
-        //  Hlavní kreslící funkce
-        // ------------------------------------------------------
+        /* -------------------------
+           KRESLENÍ + LOGIKA
+        -------------------------- */
         function draw() {
             const R = parseFloat(radiusInput.value);
             const a = parseFloat(stripInput.value);
+
             errorEl.textContent = "";
 
             if (isNaN(R) || isNaN(a) || R <= 0 || a <= 0) {
@@ -223,11 +294,18 @@
                 return;
             }
 
-            // pruhy
+            /* ---- výpočet poutek ---- */
+            const loopWidth = parseFloat(document.getElementById('loopWidth').value);
+            const halfCircumference = Math.PI * R;
+            const loopCount = Math.floor(halfCircumference / 50);
+            document.getElementById('loopCount').textContent = loopCount;
+
+            /* ---- výpočet pruhů ---- */
             const fullStrips = Math.floor(R / a);
             const remainder = R - fullStrips * a;
             const stripHeights = [];
             let y = 0;
+
             for (let i = 0; i < fullStrips; i++) {
                 stripHeights.push({ yBottom: y, yTop: y + a });
                 y += a;
@@ -236,7 +314,6 @@
                 stripHeights.push({ yBottom: y, yTop: R });
             }
 
-            // délky pruhů
             const lengths = [];
             stripHeights.forEach((sh, idx) => {
                 if (idx === 0) {
@@ -248,7 +325,7 @@
                 }
             });
 
-            // vykreslení canvasu
+            /* ---- vykreslení canvasu ---- */
             const margin = 40;
             const w = canvas.width;
             const h = canvas.height;
@@ -259,18 +336,12 @@
                 (h - 2 * margin) / R
             );
 
-            function toScreenX(x) {
-                return w / 2 + x * scale;
-            }
-            function toScreenY(yVal) {
-                return h - margin - yVal * scale;
-            }
+            const toScreenX = x => w / 2 + x * scale;
+            const toScreenY = yVal => h - margin - yVal * scale;
 
-            // pozadí
             ctx.fillStyle = "#fcfcff";
             ctx.fillRect(0, 0, w, h);
 
-            // půlkružnice
             ctx.strokeStyle = "#f39c12";
             ctx.lineWidth = 2.5;
             ctx.beginPath();
@@ -284,7 +355,6 @@
             }
             ctx.stroke();
 
-            // pruhy
             const colors = ["#e74c3c", "#2980b9", "#9b59b6", "#27ae60", "#7f8c8d", "#e67e22"];
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -299,7 +369,6 @@
                 const xLeft = -L / 2;
                 const xRight = L / 2;
 
-                // pruh
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -311,7 +380,6 @@
                 );
                 ctx.stroke();
 
-                // průsečík s kružnicí
                 if (yTop < R - 1e-6) {
                     const xInt = Math.sqrt(Math.max(0, R * R - yTop * yTop));
                     const sx1 = toScreenX(xInt);
@@ -334,31 +402,42 @@
                 }
             });
 
-            // tabulka délek
+            /* ---- tabulka délek vlevo ---- */
             let html = "<table><thead><tr><th>Pruh</th><th>Horní výška y (cm)</th><th>Délka horní hrany (cm)</th></tr></thead><tbody>";
             lengths.forEach(obj => {
                 html += `<tr>
-          <td>${obj.index}</td>
-          <td>${obj.yTop.toFixed(2)}</td>
-          <td>${obj.length.toFixed(2)}</td>
-        </tr>`;
+                    <td>${obj.index}</td>
+                    <td>${obj.yTop.toFixed(2)}</td>
+                    <td>${obj.length.toFixed(2)}</td>
+                </tr>`;
             });
             html += "</tbody></table>";
             tableContainer.innerHTML = html;
 
-            // -----------------------
-            //  TABULKA ODSTŘIHŮ
-            // -----------------------
+            /* ---- burger tabulka odstřihů ---- */
             const cutHTML = generateCutTable(stripHeights, R, 10);
             cutTableContainer.innerHTML = cutHTML;
         }
 
-        // Eventy
+        /* --- eventy --- */
         document.getElementById('updateBtn').addEventListener('click', draw);
         radiusInput.addEventListener('change', draw);
         stripInput.addEventListener('change', draw);
+        document.getElementById('loopWidth').addEventListener('change', draw);
 
-        // první vykreslení
+        /* --- ovládání burger menu --- */
+        document.addEventListener("click", e => {
+            const header =
+                e.target.classList.contains("collapsible") ? e.target :
+                    e.target.parentElement?.classList.contains("collapsible") ? e.target.parentElement :
+                        null;
+
+            if (!header) return;
+
+            const content = header.nextElementSibling;
+            content.classList.toggle("open");
+        });
+
         draw();
     </script>
 </body>
